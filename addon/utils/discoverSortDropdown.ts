@@ -1,0 +1,90 @@
+// Sort choices a list can offer in the Stremio Discover dropdown in place of
+// genres. Stremio gives each catalog one free-form dropdown (the genre extra),
+// so a list that opts in sends one of these labels as its "genre" and the
+// catalog handler maps it back to the provider's own sort and direction.
+//
+// Sorting has to happen before a list is cut into pages, so each provider maps
+// the labels to its native sort. Providers listed here sort server-side.
+
+export type SortDropdownProvider = 'mdblist' | 'trakt';
+
+export interface SortChoice {
+  label: string;
+  sort: string;
+  order: 'asc' | 'desc';
+}
+
+const MDBLIST_CHOICES: SortChoice[] = [
+  { label: 'Release Date (Newest)', sort: 'released', order: 'desc' },
+  { label: 'Release Date (Oldest)', sort: 'released', order: 'asc' },
+  { label: 'List Rank', sort: 'rank', order: 'asc' },
+  { label: 'MDBList Score', sort: 'score', order: 'desc' },
+  { label: 'IMDb Rating', sort: 'imdbrating', order: 'desc' },
+  { label: 'IMDb Votes', sort: 'imdbvotes', order: 'desc' },
+  { label: 'Letterboxd Rating', sort: 'letterrating', order: 'desc' },
+  { label: 'Rotten Tomatoes', sort: 'rtomatoes', order: 'desc' },
+  { label: 'Metacritic', sort: 'metacritic', order: 'desc' },
+  { label: 'Runtime (Longest)', sort: 'runtime', order: 'desc' },
+  { label: 'Runtime (Shortest)', sort: 'runtime', order: 'asc' },
+  { label: 'Title (A-Z)', sort: 'title', order: 'asc' },
+  { label: 'Date Added (Newest)', sort: 'added', order: 'desc' },
+  { label: 'Random', sort: 'random', order: 'asc' },
+];
+
+const TRAKT_CHOICES: SortChoice[] = [
+  { label: 'Release Date (Newest)', sort: 'released', order: 'desc' },
+  { label: 'Release Date (Oldest)', sort: 'released', order: 'asc' },
+  { label: 'List Rank', sort: 'rank', order: 'asc' },
+  { label: 'Trakt Rating', sort: 'percentage', order: 'desc' },
+  { label: 'IMDb Rating', sort: 'imdb_rating', order: 'desc' },
+  { label: 'IMDb Votes', sort: 'imdb_votes', order: 'desc' },
+  { label: 'TMDB Rating', sort: 'tmdb_rating', order: 'desc' },
+  { label: 'Rotten Tomatoes', sort: 'rt_tomatometer', order: 'desc' },
+  { label: 'Metacritic', sort: 'metascore', order: 'desc' },
+  { label: 'Popularity', sort: 'popularity', order: 'desc' },
+  { label: 'Runtime (Longest)', sort: 'runtime', order: 'desc' },
+  { label: 'Runtime (Shortest)', sort: 'runtime', order: 'asc' },
+  { label: 'Title (A-Z)', sort: 'title', order: 'asc' },
+  { label: 'Date Added (Newest)', sort: 'added', order: 'desc' },
+  { label: 'Random', sort: 'random', order: 'asc' },
+];
+
+const CHOICES: Record<SortDropdownProvider, SortChoice[]> = { mdblist: MDBLIST_CHOICES, trakt: TRAKT_CHOICES };
+
+const BY_LABEL: Record<SortDropdownProvider, Map<string, SortChoice>> = {
+  mdblist: new Map(MDBLIST_CHOICES.map((c) => [c.label.toLowerCase(), c])),
+  trakt: new Map(TRAKT_CHOICES.map((c) => [c.label.toLowerCase(), c])),
+};
+
+// Feeds and generated catalogs with no list order to choose from.
+const TRAKT_EXCLUDED = /^trakt\.(upnext|unwatched|calendar|most_favorited|trending|popular|anticipated|recommendations|search)\b/;
+
+/** Which provider's sort choices a catalog id can offer, or null when it has none. */
+export function sortDropdownProviderForId(id: string): SortDropdownProvider | null {
+  if (id.startsWith('mdblist.')) {
+    if (id === 'mdblist.upnext' || id.startsWith('mdblist.discover.') || id.startsWith('mdblist.recommended.')) return null;
+    return 'mdblist';
+  }
+  if (id.startsWith('trakt.')) {
+    return TRAKT_EXCLUDED.test(id) ? null : 'trakt';
+  }
+  return null;
+}
+
+/** The provider whose sort choices this catalog's Discover dropdown carries, or null when it carries genres. */
+export function sortDropdownProvider(catalogConfig: any): SortDropdownProvider | null {
+  if (!catalogConfig || catalogConfig.discoverDropdown !== 'sort') return null;
+  return sortDropdownProviderForId(String(catalogConfig.id || ''));
+}
+
+export function sortChoiceLabels(provider: SortDropdownProvider): string[] {
+  return CHOICES[provider].map((c) => c.label);
+}
+
+/** The sort a dropdown value stands for, or null for 'None', an empty value or an unknown label. */
+export function resolveSortChoice(provider: SortDropdownProvider, value: string | null | undefined): SortChoice | null {
+  if (!value) return null;
+  return BY_LABEL[provider].get(String(value).trim().toLowerCase()) || null;
+}
+
+module.exports = { sortDropdownProviderForId, sortDropdownProvider, sortChoiceLabels, resolveSortChoice };

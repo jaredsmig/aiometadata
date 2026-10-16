@@ -5,7 +5,7 @@ import { fetchMDBListGenres } from "../utils/mdbList";
 import { getGenresFromStremThruCatalog, fetchStremThruCatalog } from "../utils/stremthru";
 import { fetchTraktGenres } from "../utils/traktUtils";
 import { getGenresBySelection } from "../static/genres";
-import { mdblistSortChoiceLabels, usesMdblistSortDropdown } from "../utils/mdblistSortChoices";
+import { sortChoiceLabels, sortDropdownProvider } from "../utils/discoverSortDropdown";
 import buildInfo from "./buildInfo";
 import catalogsTranslationsJson from "../static/translations.json";
 import catalogTypesJson from "../static/catalog-types.json";
@@ -209,7 +209,8 @@ async function createMDBListCatalog(userCatalog: any, mdblistKey: string, prefet
     }
 
     // A list can trade its genre filter for sort choices; 'None' keeps the list's configured sort.
-    const dropdownValues = usesMdblistSortDropdown(userCatalog) ? mdblistSortChoiceLabels() : genres;
+    const sortProvider = sortDropdownProvider(userCatalog);
+    const dropdownValues = sortProvider ? sortChoiceLabels(sortProvider) : genres;
     const genreOptions = userCatalog.id.startsWith('mdblist.recommended.')
       ? ['None']
       : (userCatalog.showInHome ? dropdownValues : ['None', ...dropdownValues]);
@@ -257,7 +258,9 @@ async function createTraktCatalog(userCatalog: any, prefetchedMovieGenres: any[]
       logger.warn(`Trakt no pre-fetched genres available for type: ${userCatalog.type}`);
     }
 
-    const genreNames = genres.map((g: any) => g.name);
+    // A list can trade its genre filter for sort choices; 'None' keeps the list's configured sort.
+    const sortProvider = sortDropdownProvider(userCatalog);
+    const genreNames = sortProvider ? sortChoiceLabels(sortProvider) : genres.map((g: any) => g.name);
 
     const genreOptions = userCatalog.showInHome ? genreNames : ['None', ...genreNames];
 

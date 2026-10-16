@@ -355,6 +355,7 @@ function reconcileMergedReferences(catalogs: CatalogConfig[]): CatalogConfig[] {
 
 import { sourceBadgeStyles, sourceBadgeLabels } from '@/lib/sourceBadges';
 import { supportsMdblistScoreFilters } from '@/utils/catalogUtils';
+import { supportsSortDropdown } from '@/lib/sortDropdown';
 
 
 
@@ -372,6 +373,27 @@ function PosterShapeField({ value, onChange }: { value: 'poster' | 'landscape'; 
         </SelectContent>
       </Select>
       <p className="text-xs text-muted-foreground">Landscape shows each title's landscape art, or its background when it has none. Jellyfin clients keep their own card shapes.</p>
+    </div>
+  );
+}
+
+/** Lets a list fill its Stremio Discover dropdown with sort options instead of genres. */
+function DiscoverDropdownField({ value, onChange }: { value: 'genres' | 'sort'; onChange: (value: 'genres' | 'sort') => void }) {
+  return (
+    <div className="space-y-2">
+      <Label>Discover Dropdown</Label>
+      <Select value={value} onValueChange={(next: 'genres' | 'sort') => onChange(next)}>
+        <SelectTrigger>
+          <SelectValue placeholder="Select dropdown contents" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="genres">Genres (filter the list)</SelectItem>
+          <SelectItem value="sort">Sort options (reorder the list)</SelectItem>
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-muted-foreground">
+        Stremio gives each catalog one dropdown in Discover. Sort options let you browse this list by release date, rating and more. Home rows keep the sort set above. Reinstall the addon after changing this.
+      </p>
     </div>
   );
 }
@@ -399,7 +421,7 @@ const MDBListSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogC
   const isDiscover = catalog.id.startsWith('mdblist.discover.');
   const minCacheTTL = minCacheTTLFor(catalog.id);
   const showSortOptions = !isUpNext && !isDiscover;
-  const showDropdownChoice = showSortOptions && !catalog.id.startsWith('mdblist.recommended.');
+  const showDropdownChoice = supportsSortDropdown(catalog.id);
   const showScoreFilters = supportsMdblistScoreFilters(catalog);
 
   const [posterShape, setPosterShape] = useState<'poster' | 'landscape'>(catalog.metadata?.posterShape === 'landscape' ? 'landscape' : 'poster');
@@ -571,23 +593,7 @@ const MDBListSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogC
                 : 'How long to cache this list before refreshing. Range: 5 minutes to 7 days.'}
             />
           )}
-          {showDropdownChoice && (
-            <div className="space-y-2">
-              <Label>Discover Dropdown</Label>
-              <Select value={discoverDropdown} onValueChange={(value: 'genres' | 'sort') => setDiscoverDropdown(value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select dropdown contents" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="genres">Genres (filter the list)</SelectItem>
-                  <SelectItem value="sort">Sort options (reorder the list)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Stremio gives each catalog one dropdown in Discover. Sort options let you browse this list by release date, rating and more. Home rows keep the sort set above. Reinstall the addon after changing this.
-              </p>
-            </div>
-          )}
+          {showDropdownChoice && <DiscoverDropdownField value={discoverDropdown} onChange={setDiscoverDropdown} />}
           {discoverDropdown !== 'sort' && (
             <div className="space-y-2">
               <Label>Genre Selection</Label>
@@ -727,6 +733,7 @@ const TraktSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogCon
   const { setConfig, catalogTTL, config } = useConfig();
   const [sort, setSort] = useState<TraktSortOption>(catalog.sort as TraktSortOption || 'default');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(catalog.sortDirection as 'asc' | 'desc' || 'asc');
+  const [discoverDropdown, setDiscoverDropdown] = useState<'genres' | 'sort'>(catalog.discoverDropdown === 'sort' ? 'sort' : 'genres');
   const [cacheTTL, setCacheTTL] = useState<number | null>(catalog.cacheTTL ?? null);
   const [useShowPoster, setUseShowPoster] = useState<boolean>(catalog.metadata?.useShowPosterForUpNext || false);
   const [hideWatchedTrakt, setHideWatchedTrakt] = useState<string>(catalog.metadata?.hideWatchedTrakt === true ? 'on' : catalog.metadata?.hideWatchedTrakt === false ? 'off' : 'global');
@@ -746,6 +753,7 @@ const TraktSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogCon
   const minCacheTTL = minCacheTTLFor(catalog.id);
   const isUpNext = catalog.id === 'trakt.upnext';
   const isCalendar = catalog.id === 'trakt.calendar';
+  const showDropdownChoice = supportsSortDropdown(catalog.id);
   const showSortOptions = !catalog.id.startsWith('trakt.trending.') && !catalog.id.startsWith('trakt.popular.') && !catalog.id.startsWith('trakt.anticipated.') && catalog.id !== 'trakt.upnext';
 
   const [posterShape, setPosterShape] = useState<'poster' | 'landscape'>(catalog.metadata?.posterShape === 'landscape' ? 'landscape' : 'poster');
@@ -763,6 +771,7 @@ const TraktSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogCon
               ...c,
               sort,
               sortDirection,
+              discoverDropdown: showDropdownChoice && discoverDropdown === 'sort' ? 'sort' : undefined,
               cacheTTL: resolveCatalogTTL(cacheTTL, minCacheTTL),
               metadata: {
                 ...c.metadata, posterShape: posterShape === 'landscape' ? 'landscape' : undefined,
@@ -849,6 +858,7 @@ const TraktSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogCon
             help="Minimum 5 minutes to avoid excessive API calls"
           />
 
+          {showDropdownChoice && <DiscoverDropdownField value={discoverDropdown} onChange={setDiscoverDropdown} />}
           {isUpNext && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">

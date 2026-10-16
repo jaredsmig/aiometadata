@@ -3,7 +3,7 @@ import { getGenreList } from "./getGenreList.js";
 import { stampListedAt } from "../utils/listedAt";
 import { getLanguages } from "./getLanguages.js";
 import { fetchMDBListItems, parseMDBListItems, fetchMDBListBatchMediaInfo, fetchMDBListUpNext, parseMDBListUpNextItems, usesMdblistExternalItemsEndpoint, supportsMdblistScoreFilters } from "../utils/mdbList.js";
-import { usesMdblistSortDropdown, resolveMdblistSortChoice } from "../utils/mdblistSortChoices.js";
+import { sortDropdownProvider, resolveSortChoice } from "../utils/discoverSortDropdown.js";
 import { fetchStremThruCatalog, parseStremThruItems } from "../utils/stremthru.js";
 import { fetchTraktWatchlistItems, fetchTraktFavoritesItems, fetchTraktRecommendationsItems, fetchTraktListItems, fetchTraktListItemsById, parseTraktItems, fetchTraktMostFavoritedItems, fetchTraktCalendarShows, fetchTraktSearchItems, getTraktAccessToken, fetchTraktUpNextEpisodes, fetchTraktUnwatchedEpisodes, fetchTraktTrendingItems, fetchTraktPopularItems, fetchTraktAnticipatedItems } from "../utils/traktUtils.js";
 import { fetchSimklTrendingItems, fetchSimklRecipeItems, fetchSimklWatchlistItems, fetchSimklUpNextItems, parseSimklItems, parseSimklUpNextItems, getSimklToken, fetchSimklCalendarItems, fetchSimklGenreItems, fetchSimklDvdReleases, fetchSimklListPage } from "../utils/simklUtils.js";
@@ -852,8 +852,8 @@ async function getTmdbAndMdbListCatalog(type: string, id: string, genre: string,
     // A list whose Discover dropdown carries sort choices: the "genre" is a sort label,
     // never a genre filter. 'None' or no value falls back to the list's configured sort.
     let dropdownSort: { sort: string; order: 'asc' | 'desc' } | null = null;
-    if (usesMdblistSortDropdown(catalogConfig)) {
-      dropdownSort = resolveMdblistSortChoice(genre);
+    if (sortDropdownProvider(catalogConfig) === 'mdblist') {
+      dropdownSort = resolveSortChoice('mdblist', genre);
       genre = 'None';
     }
     const configuredSort = catalogConfig?.sort === 'default' ? undefined : catalogConfig?.sort;
@@ -2026,8 +2026,13 @@ async function getTraktCatalog(
     const pageSize = parseInt(process.env.CATALOG_LIST_ITEMS_SIZE as string) || 20;
 
     const catalogConfig = config.catalogs?.find(c => c.id === catalogId);
-    const sort = catalogConfig?.sort === 'default' ? undefined : catalogConfig?.sort;
-    const sortDirection = catalogConfig?.sortDirection;
+    // A list whose Discover dropdown carries sort choices: the "genre" is a sort label,
+    // never a genre filter. 'None' or no value falls back to the list's configured sort.
+    // genre is left as sent, since this runs inside the retry loop.
+    const traktSortDropdown = sortDropdownProvider(catalogConfig) === 'trakt';
+    const dropdownSort = traktSortDropdown ? resolveSortChoice('trakt', genre) : null;
+    const sort = dropdownSort ? dropdownSort.sort : (catalogConfig?.sort === 'default' ? undefined : catalogConfig?.sort);
+    const sortDirection = dropdownSort ? dropdownSort.order : catalogConfig?.sortDirection;
     // Determine content type filter for API
     let traktType: 'movies' | 'shows' | undefined;
     if (type === 'movie') traktType = 'movies';
@@ -2035,7 +2040,7 @@ async function getTraktCatalog(
     // If type is 'all', traktType remains undefined
 
     let genreSlug = undefined;
-    if (genre && genre !== 'None') {
+    if (!traktSortDropdown && genre && genre !== 'None') {
        // Fetch the full genre objects list (cached)
        const genreList = await require('../utils/traktUtils.js').fetchTraktGenres(traktType || 'all');
        

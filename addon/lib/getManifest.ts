@@ -5,6 +5,7 @@ import { fetchMDBListGenres } from "../utils/mdbList";
 import { getGenresFromStremThruCatalog, fetchStremThruCatalog } from "../utils/stremthru";
 import { fetchTraktGenres } from "../utils/traktUtils";
 import { getGenresBySelection } from "../static/genres";
+import { mdblistSortChoiceLabels, usesMdblistSortDropdown } from "../utils/mdblistSortChoices";
 import buildInfo from "./buildInfo";
 import catalogsTranslationsJson from "../static/translations.json";
 import catalogTypesJson from "../static/catalog-types.json";
@@ -207,9 +208,11 @@ async function createMDBListCatalog(userCatalog: any, mdblistKey: string, prefet
       logger.info(`MDBList using ${genres.length} static fallback genres for selection: ${genreSelection}`);
     }
 
+    // A list can trade its genre filter for sort choices; 'None' keeps the list's configured sort.
+    const dropdownValues = usesMdblistSortDropdown(userCatalog) ? mdblistSortChoiceLabels() : genres;
     const genreOptions = userCatalog.id.startsWith('mdblist.recommended.')
       ? ['None']
-      : (userCatalog.showInHome ? genres : ['None', ...genres]);
+      : (userCatalog.showInHome ? dropdownValues : ['None', ...dropdownValues]);
 
     const catalogType = userCatalog.displayType || userCatalog.type;
 

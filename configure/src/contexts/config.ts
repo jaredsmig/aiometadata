@@ -80,6 +80,8 @@ export interface CatalogConfig {
   displayType?: string;
   // Genre selection for MDBList catalogs - which genre set to use
   genreSelection?: 'standard' | 'anime' | 'all';
+  // MDBList lists: fill the Stremio Discover dropdown with genres (default) or sort options
+  discoverDropdown?: 'genres' | 'sort';
   // MDBList external list score filters
   filter_score_min?: number;
   filter_score_max?: number;

@@ -3,6 +3,7 @@ import { getGenreList } from "./getGenreList.js";
 import { stampListedAt } from "../utils/listedAt";
 import { getLanguages } from "./getLanguages.js";
 import { fetchMDBListItems, parseMDBListItems, fetchMDBListBatchMediaInfo, fetchMDBListUpNext, parseMDBListUpNextItems, usesMdblistExternalItemsEndpoint, supportsMdblistScoreFilters } from "../utils/mdbList.js";
+import { usesMdblistSortDropdown, resolveMdblistSortChoice } from "../utils/mdblistSortChoices.js";
 import { fetchStremThruCatalog, parseStremThruItems } from "../utils/stremthru.js";
 import { fetchTraktWatchlistItems, fetchTraktFavoritesItems, fetchTraktRecommendationsItems, fetchTraktListItems, fetchTraktListItemsById, parseTraktItems, fetchTraktMostFavoritedItems, fetchTraktCalendarShows, fetchTraktSearchItems, getTraktAccessToken, fetchTraktUpNextEpisodes, fetchTraktUnwatchedEpisodes, fetchTraktTrendingItems, fetchTraktPopularItems, fetchTraktAnticipatedItems } from "../utils/traktUtils.js";
 import { fetchSimklTrendingItems, fetchSimklRecipeItems, fetchSimklWatchlistItems, fetchSimklUpNextItems, parseSimklItems, parseSimklUpNextItems, getSimklToken, fetchSimklCalendarItems, fetchSimklGenreItems, fetchSimklDvdReleases, fetchSimklListPage } from "../utils/simklUtils.js";
@@ -848,6 +849,18 @@ async function getTmdbAndMdbListCatalog(type: string, id: string, genre: string,
     logger.info(`Fetching MDBList catalog: ${id}, Genre: ${genre}, Page: ${page}`);
     const catalogConfig = config.catalogs?.find(c => c.id === id);
 
+    // A list whose Discover dropdown carries sort choices: the "genre" is a sort label,
+    // never a genre filter. 'None' or no value falls back to the list's configured sort.
+    let dropdownSort: { sort: string; order: 'asc' | 'desc' } | null = null;
+    if (usesMdblistSortDropdown(catalogConfig)) {
+      dropdownSort = resolveMdblistSortChoice(genre);
+      genre = 'None';
+    }
+    const configuredSort = catalogConfig?.sort === 'default' ? undefined : catalogConfig?.sort;
+    const configuredOrder = catalogConfig?.sort === 'default' ? undefined : catalogConfig?.order;
+    const listSort = dropdownSort ? dropdownSort.sort : configuredSort;
+    const listOrder = dropdownSort ? dropdownSort.order : configuredOrder;
+
     // Handle MDBList Discover catalogs (dynamic filter-based)
     if (id.startsWith('mdblist.discover.')) {
       const apiKey = config.apiKeys?.mdblist || process.env.MDBLIST_API_KEY || process.env.BUILT_IN_MDBLIST_API_KEY || '';
@@ -937,8 +950,8 @@ async function getTmdbAndMdbListCatalog(type: string, id: string, genre: string,
     if (usesMdblistExternalItemsEndpoint(catalogConfig)) {
       logger.info(`Fetching MDBList list from sourceUrl: ${catalogConfig.sourceUrl}`);
 
-      const sort = catalogConfig?.sort === 'default' ? undefined : catalogConfig?.sort;
-      const order = catalogConfig?.sort === 'default' ? undefined : catalogConfig?.order;
+      const sort = listSort;
+      const order = listOrder;
       const unified = catalogConfig.type === 'all';
       const filterScoreMin = catalogConfig?.filter_score_min;
       const filterScoreMax = catalogConfig?.filter_score_max;
@@ -966,9 +979,9 @@ async function getTmdbAndMdbListCatalog(type: string, id: string, genre: string,
       return metas;
     }
 
-    const sort = catalogConfig?.sort === 'default' ? undefined : catalogConfig?.sort;
-    const order = catalogConfig?.sort === 'default' ? undefined : catalogConfig?.order;
-    logger.debug(`MDBList sorting - sort: ${sort}, order: ${order}`);
+    const sort = listSort;
+    const order = listOrder;
+    logger.debug(`MDBList sorting - sort: ${sort}, order: ${order}${dropdownSort ? ' (from Discover dropdown)' : ''}`);
     
     // Convert genre title to slug format for MDBList API (using the mapping from API)
     const { convertGenreToSlug } = await import('../utils/mdbList');

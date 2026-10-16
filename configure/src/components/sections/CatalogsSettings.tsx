@@ -382,6 +382,7 @@ const MDBListSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogC
   const [order, setOrder] = useState<'asc' | 'desc'>(catalog.order || 'asc');
   const [cacheTTL, setCacheTTL] = useState<number | null>(catalog.cacheTTL ?? null);
   const [genreSelection, setGenreSelection] = useState<GenreSelection>(catalog.genreSelection || 'standard');
+  const [discoverDropdown, setDiscoverDropdown] = useState<'genres' | 'sort'>(catalog.discoverDropdown === 'sort' ? 'sort' : 'genres');
   const [enableRatingPosters, setEnableRatingPosters] = useState<boolean>(catalog.enableRatingPosters !== false);
   const [filterScoreMin, setFilterScoreMin] = useState<number | undefined>(catalog.filter_score_min);
   const [filterScoreMax, setFilterScoreMax] = useState<number | undefined>(catalog.filter_score_max);
@@ -398,6 +399,7 @@ const MDBListSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogC
   const isDiscover = catalog.id.startsWith('mdblist.discover.');
   const minCacheTTL = minCacheTTLFor(catalog.id);
   const showSortOptions = !isUpNext && !isDiscover;
+  const showDropdownChoice = showSortOptions && !catalog.id.startsWith('mdblist.recommended.');
   const showScoreFilters = supportsMdblistScoreFilters(catalog);
 
   const [posterShape, setPosterShape] = useState<'poster' | 'landscape'>(catalog.metadata?.posterShape === 'landscape' ? 'landscape' : 'poster');
@@ -419,6 +421,7 @@ const MDBListSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogC
             order,
             cacheTTL: resolveCatalogTTL(cacheTTL, minCacheTTL),
             genreSelection,
+            discoverDropdown: showDropdownChoice && discoverDropdown === 'sort' ? 'sort' : undefined,
             enableRatingPosters,
             filter_score_min: filterScoreMin,
             filter_score_max: filterScoreMax,
@@ -568,22 +571,41 @@ const MDBListSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogC
                 : 'How long to cache this list before refreshing. Range: 5 minutes to 7 days.'}
             />
           )}
-          <div className="space-y-2">
-            <Label>Genre Selection</Label>
-            <Select value={genreSelection} onValueChange={(value: GenreSelection) => setGenreSelection(value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select genre set" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="standard">Standard Genres Only (44 genres)</SelectItem>
-                <SelectItem value="anime">Anime Genres Only (22 genres)</SelectItem>
-                <SelectItem value="all">All Genres (66 genres including anime)</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Choose which genre set to use for this specific list.
-            </p>
-          </div>
+          {showDropdownChoice && (
+            <div className="space-y-2">
+              <Label>Discover Dropdown</Label>
+              <Select value={discoverDropdown} onValueChange={(value: 'genres' | 'sort') => setDiscoverDropdown(value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select dropdown contents" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="genres">Genres (filter the list)</SelectItem>
+                  <SelectItem value="sort">Sort options (reorder the list)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Stremio gives each catalog one dropdown in Discover. Sort options let you browse this list by release date, rating and more. Home rows keep the sort set above. Reinstall the addon after changing this.
+              </p>
+            </div>
+          )}
+          {discoverDropdown !== 'sort' && (
+            <div className="space-y-2">
+              <Label>Genre Selection</Label>
+              <Select value={genreSelection} onValueChange={(value: GenreSelection) => setGenreSelection(value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select genre set" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="standard">Standard Genres Only (44 genres)</SelectItem>
+                  <SelectItem value="anime">Anime Genres Only (22 genres)</SelectItem>
+                  <SelectItem value="all">All Genres (66 genres including anime)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Choose which genre set to use for this specific list.
+              </p>
+            </div>
+          )}
           {(config.apiKeys?.rpdb || config.apiKeys?.topPoster || config.customPosterUrlPattern) && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">

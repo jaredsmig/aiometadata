@@ -34,6 +34,7 @@ const aiCatalogLogger = consola.withTag('AICatalog');
 const { stripReleaseAvailabilityForResponse } = require('./utils/releaseAvailability');
 
 const { supportsMdblistScoreFilters } = require("./utils/mdbList");
+const { usesMdblistSortDropdown, resolveMdblistSortChoice } = require("./utils/mdblistSortChoices");
 
 const configApi = require('./lib/configApi');
 const database = require('./lib/database');
@@ -5559,7 +5560,10 @@ const catalogRoute = async function (req, res) {
 
 
 
-    if (catalogConfig?.randomizePerPage && Array.isArray(responseData?.metas) && responseData.metas.length > 1) {
+    // A sort picked from the Discover dropdown is an explicit order, so it is not shuffled.
+    const dropdownChoice = usesMdblistSortDropdown(catalogConfig) ? resolveMdblistSortChoice(extraArgs?.genre) : null;
+    const pickedDropdownSort = !!dropdownChoice && dropdownChoice.sort !== 'random';
+    if (catalogConfig?.randomizePerPage && !pickedDropdownSort && Array.isArray(responseData?.metas) && responseData.metas.length > 1) {
       responseData = {
         ...responseData,
         metas: shuffleMetas(responseData.metas)

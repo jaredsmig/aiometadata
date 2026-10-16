@@ -260,6 +260,7 @@ function getManifestFingerprint(config: AppConfig): string {
     name: c.name,
     displayType: c.displayType,
     showInHome: c.showInHome,
+    discoverDropdown: c.discoverDropdown,
   }));
 
   const subtitlesResource = hasAnyWatchTrackingEnabled(config);

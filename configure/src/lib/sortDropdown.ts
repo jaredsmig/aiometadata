@@ -9,5 +9,6 @@ export function supportsSortDropdown(catalogId: string): boolean {
     return catalogId !== 'mdblist.upnext' && !catalogId.startsWith('mdblist.discover.') && !catalogId.startsWith('mdblist.recommended.');
   }
   if (catalogId.startsWith('trakt.')) return !TRAKT_EXCLUDED.test(catalogId);
+  if (catalogId.startsWith('letterboxd.')) return true;
   return false;
 }

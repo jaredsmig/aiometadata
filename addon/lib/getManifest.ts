@@ -484,7 +484,11 @@ async function createLetterboxdCatalog(userCatalog: any, showPrefix: boolean = f
       "9u":  "War",
       "8Q":  "Western",
     };
-    let genreOptions = Object.values(genreNameById).sort((a, b) => a.localeCompare(b));
+    // A list can trade its genre filter for sort choices; 'None' keeps the list's own order.
+    const sortProvider = sortDropdownProvider(userCatalog);
+    let genreOptions = sortProvider
+      ? sortChoiceLabels(sortProvider)
+      : Object.values(genreNameById).sort((a, b) => a.localeCompare(b));
     genreOptions = userCatalog.showInHome ? genreOptions : ['None', ...genreOptions];
     const catalog = {
       id: userCatalog.id,

@@ -4,9 +4,11 @@
 // catalog handler maps it back to the provider's own sort and direction.
 //
 // Sorting has to happen before a list is cut into pages, so each provider maps
-// the labels to its native sort. Providers listed here sort server-side.
+// the labels to its native sort. MDBList and Trakt sort server-side; Letterboxd
+// lists arrive whole from StremThru, so they are sorted here on the fields
+// StremThru sends (year, rating, runtime, title, index).
 
-export type SortDropdownProvider = 'mdblist' | 'trakt';
+export type SortDropdownProvider = 'mdblist' | 'trakt' | 'letterboxd';
 
 export interface SortChoice {
   label: string;
@@ -49,11 +51,24 @@ const TRAKT_CHOICES: SortChoice[] = [
   { label: 'Random', sort: 'random', order: 'asc' },
 ];
 
-const CHOICES: Record<SortDropdownProvider, SortChoice[]> = { mdblist: MDBLIST_CHOICES, trakt: TRAKT_CHOICES };
+// sort names a StremThru list item field. StremThru sends the release year only,
+// so titles from the same year keep their list order.
+const LETTERBOXD_CHOICES: SortChoice[] = [
+  { label: 'Release Year (Newest)', sort: 'year', order: 'desc' },
+  { label: 'Release Year (Oldest)', sort: 'year', order: 'asc' },
+  { label: 'List Order', sort: 'index', order: 'asc' },
+  { label: 'Letterboxd Rating', sort: 'rating', order: 'desc' },
+  { label: 'Runtime (Longest)', sort: 'runtime', order: 'desc' },
+  { label: 'Runtime (Shortest)', sort: 'runtime', order: 'asc' },
+  { label: 'Title (A-Z)', sort: 'title', order: 'asc' },
+];
+
+const CHOICES: Record<SortDropdownProvider, SortChoice[]> = { mdblist: MDBLIST_CHOICES, trakt: TRAKT_CHOICES, letterboxd: LETTERBOXD_CHOICES };
 
 const BY_LABEL: Record<SortDropdownProvider, Map<string, SortChoice>> = {
   mdblist: new Map(MDBLIST_CHOICES.map((c) => [c.label.toLowerCase(), c])),
   trakt: new Map(TRAKT_CHOICES.map((c) => [c.label.toLowerCase(), c])),
+  letterboxd: new Map(LETTERBOXD_CHOICES.map((c) => [c.label.toLowerCase(), c])),
 };
 
 // Feeds and generated catalogs with no list order to choose from.
@@ -68,6 +83,7 @@ export function sortDropdownProviderForId(id: string): SortDropdownProvider | nu
   if (id.startsWith('trakt.')) {
     return TRAKT_EXCLUDED.test(id) ? null : 'trakt';
   }
+  if (id.startsWith('letterboxd.')) return 'letterboxd';
   return null;
 }
 
@@ -87,4 +103,34 @@ export function resolveSortChoice(provider: SortDropdownProvider, value: string 
   return BY_LABEL[provider].get(String(value).trim().toLowerCase()) || null;
 }
 
-module.exports = { sortDropdownProviderForId, sortDropdownProvider, sortChoiceLabels, resolveSortChoice };
+// StremThru sends 0 when it has no year, rating or runtime; for index, 0 is the first item.
+const ZERO_MEANS_MISSING = new Set(['year', 'rating', 'runtime']);
+
+/**
+ * Sorts a whole list held in memory by one item field. Items missing the field
+ * (no year, no rating) go last in either direction, and ties keep list order.
+ * Returns a new array.
+ */
+export function sortItemsLocally<T extends Record<string, any>>(items: T[], choice: SortChoice): T[] {
+  const field = choice.sort;
+  const dir = choice.order === 'desc' ? -1 : 1;
+  const zeroIsMissing = ZERO_MEANS_MISSING.has(field);
+  const missing = (v: any) => v === undefined || v === null || v === '' || (zeroIsMissing && v === 0);
+  return items
+    .map((item, position) => ({ item, position }))
+    .sort((a, b) => {
+      const av = a.item[field];
+      const bv = b.item[field];
+      const am = missing(av);
+      const bm = missing(bv);
+      if (am !== bm) return am ? 1 : -1;
+      if (!am && av !== bv) {
+        const cmp = typeof av === 'string' ? av.localeCompare(String(bv), undefined, { sensitivity: 'base' }) : av - bv;
+        if (cmp !== 0) return cmp * dir;
+      }
+      return a.position - b.position;
+    })
+    .map(({ item }) => item);
+}
+
+module.exports = { sortDropdownProviderForId, sortDropdownProvider, sortChoiceLabels, resolveSortChoice, sortItemsLocally };

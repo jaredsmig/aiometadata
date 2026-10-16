@@ -3,7 +3,7 @@ import { getGenreList } from "./getGenreList.js";
 import { stampListedAt } from "../utils/listedAt";
 import { getLanguages } from "./getLanguages.js";
 import { fetchMDBListItems, parseMDBListItems, fetchMDBListBatchMediaInfo, fetchMDBListUpNext, parseMDBListUpNextItems, usesMdblistExternalItemsEndpoint, supportsMdblistScoreFilters } from "../utils/mdbList.js";
-import { sortDropdownProvider, resolveSortChoice } from "../utils/discoverSortDropdown.js";
+import { sortDropdownProvider, resolveSortChoice, sortItemsLocally } from "../utils/discoverSortDropdown.js";
 import { fetchStremThruCatalog, parseStremThruItems } from "../utils/stremthru.js";
 import { fetchTraktWatchlistItems, fetchTraktFavoritesItems, fetchTraktRecommendationsItems, fetchTraktListItems, fetchTraktListItemsById, parseTraktItems, fetchTraktMostFavoritedItems, fetchTraktCalendarShows, fetchTraktSearchItems, getTraktAccessToken, fetchTraktUpNextEpisodes, fetchTraktUnwatchedEpisodes, fetchTraktTrendingItems, fetchTraktPopularItems, fetchTraktAnticipatedItems } from "../utils/traktUtils.js";
 import { fetchSimklTrendingItems, fetchSimklRecipeItems, fetchSimklWatchlistItems, fetchSimklUpNextItems, parseSimklItems, parseSimklUpNextItems, getSimklToken, fetchSimklCalendarItems, fetchSimklGenreItems, fetchSimklDvdReleases, fetchSimklListPage } from "../utils/simklUtils.js";
@@ -2733,7 +2733,15 @@ async function getLetterboxdCatalog(
     const allItems = listData.data.items;
     logger.info(`Retrieved ${allItems.length} items from Letterboxd list`);
     let filteredItems = allItems;
-    if( genreName && genreName.toLowerCase() !== 'none') {
+    // A list whose Discover dropdown carries sort choices: the "genre" is a sort label.
+    // The whole list is in hand, so it is sorted before it is cut into pages.
+    if (sortDropdownProvider(catalogConfig) === 'letterboxd') {
+      const dropdownSort = resolveSortChoice('letterboxd', genreName);
+      if (dropdownSort) {
+        filteredItems = sortItemsLocally(filteredItems, dropdownSort);
+        logger.debug(`Letterboxd sorted by ${dropdownSort.sort} ${dropdownSort.order} (from Discover dropdown)`);
+      }
+    } else if( genreName && genreName.toLowerCase() !== 'none') {
       filteredItems = filteredItems.filter(item => item.genre_ids.includes(getLetterboxdGenreIdByName(genreName)));
     }
 

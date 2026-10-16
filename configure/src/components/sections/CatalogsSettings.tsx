@@ -392,7 +392,7 @@ function DiscoverDropdownField({ value, onChange }: { value: 'genres' | 'sort'; 
         </SelectContent>
       </Select>
       <p className="text-xs text-muted-foreground">
-        Stremio gives each catalog one dropdown in Discover. Sort options let you browse this list by release date, rating and more. Home rows keep the sort set above. Reinstall the addon after changing this.
+        Stremio gives each catalog one dropdown in Discover. Sort options let you browse this list by release date, rating and more. Home rows keep this list's usual order. Reinstall the addon after changing this.
       </p>
     </div>
   );
@@ -1512,6 +1512,7 @@ const MovieLensSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: Catalo
 const LetterboxdSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogConfig, isOpen: boolean, onClose: () => void }) => {
   const { setConfig, catalogTTL, config } = useConfig();
   const [cacheTTL, setCacheTTL] = useState<number | null>(catalog.cacheTTL ?? null);
+  const [discoverDropdown, setDiscoverDropdown] = useState<'genres' | 'sort'>(catalog.discoverDropdown === 'sort' ? 'sort' : 'genres');
   const [enableRatingPosters, setEnableRatingPosters] = useState<boolean>(catalog.enableRatingPosters !== false);
   const [hideWatchedTrakt, setHideWatchedTrakt] = useState<string>(catalog.metadata?.hideWatchedTrakt === true ? 'on' : catalog.metadata?.hideWatchedTrakt === false ? 'off' : 'global');
   const [hideWatchedAnilist, setHideWatchedAnilist] = useState<string>(catalog.metadata?.hideWatchedAnilist === true ? 'on' : catalog.metadata?.hideWatchedAnilist === false ? 'off' : 'global');
@@ -1532,7 +1533,7 @@ const LetterboxdSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: Catal
       ...prev,
       catalogs: prev.catalogs.map(c =>
         c.id === catalog.id && c.type === catalog.type
-          ? { ...c, cacheTTL: resolveCatalogTTL(cacheTTL, minCacheTTLFor(catalog.id)), enableRatingPosters, metadata: { ...c.metadata, posterShape: posterShape === 'landscape' ? 'landscape' : undefined, hideWatchedTrakt: hideTraktValue, hideWatchedAnilist: hideAnilistValue, hideWatchedMdblist: hideMdblistValue, hideWatchedSimkl: hideSimklValue, hideUnreleasedDigital: hideUnreleasedDigitalValue, hideUnreleasedShows: hideUnreleasedShowsValue } }
+          ? { ...c, cacheTTL: resolveCatalogTTL(cacheTTL, minCacheTTLFor(catalog.id)), discoverDropdown: discoverDropdown === 'sort' ? 'sort' : undefined, enableRatingPosters, metadata: { ...c.metadata, posterShape: posterShape === 'landscape' ? 'landscape' : undefined, hideWatchedTrakt: hideTraktValue, hideWatchedAnilist: hideAnilistValue, hideWatchedMdblist: hideMdblistValue, hideWatchedSimkl: hideSimklValue, hideUnreleasedDigital: hideUnreleasedDigitalValue, hideUnreleasedShows: hideUnreleasedShowsValue } }
           : c
       )
     }));
@@ -1545,6 +1546,7 @@ const LetterboxdSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: Catal
           <DialogTitle>Letterboxd Catalog Settings</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
+          <DiscoverDropdownField value={discoverDropdown} onChange={setDiscoverDropdown} />
           <CacheTTLField
             id="letterboxd-cache-ttl"
             value={cacheTTL}

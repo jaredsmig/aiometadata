@@ -1,0 +1,28 @@
+# Local test instance for the Discover sort dropdown branch. See local-test/README.md.
+#   docker compose -f local-test/compose.yml up --build
+name: aiometadata-local-test
+services:
+  aiometadata:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "3232:3232"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: "3232"
+      HOST_NAME: http://localhost:3232
+      REDIS_URL: redis://redis:6379
+      DATABASE_URI: sqlite://addon/data/db.sqlite
+    volumes:
+      - aiometadata-data:/app/addon/data
+      - ./check-sort-dropdown.mjs:/local-test/check-sort-dropdown.mjs:ro
+    depends_on:
+      - redis
+  redis:
+    image: redis:8
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+volumes:
+  aiometadata-data:

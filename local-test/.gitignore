@@ -1,0 +1,3 @@
+# Your config backup (it can contain API keys) and local settings never get committed.
+*.json
+.env

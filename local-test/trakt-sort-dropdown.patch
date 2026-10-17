@@ -1,0 +1,167 @@
+diff --git a/addon/lib/getCatalog.ts b/addon/lib/getCatalog.ts
+index 2bb0fbd..d59b861 100644
+--- a/addon/lib/getCatalog.ts
++++ b/addon/lib/getCatalog.ts
+@@ -2026,8 +2026,13 @@ async function getTraktCatalog(
+     const pageSize = parseInt(process.env.CATALOG_LIST_ITEMS_SIZE as string) || 20;
+ 
+     const catalogConfig = config.catalogs?.find(c => c.id === catalogId);
+-    const sort = catalogConfig?.sort === 'default' ? undefined : catalogConfig?.sort;
+-    const sortDirection = catalogConfig?.sortDirection;
++    // A list whose Discover dropdown carries sort choices: the "genre" is a sort label,
++    // never a genre filter. 'None' or no value falls back to the list's configured sort.
++    // genre is left as sent, since this runs inside the retry loop.
++    const traktSortDropdown = sortDropdownProvider(catalogConfig) === 'trakt';
++    const dropdownSort = traktSortDropdown ? resolveSortChoice('trakt', genre) : null;
++    const sort = dropdownSort ? dropdownSort.sort : (catalogConfig?.sort === 'default' ? undefined : catalogConfig?.sort);
++    const sortDirection = dropdownSort ? dropdownSort.order : catalogConfig?.sortDirection;
+     // Determine content type filter for API
+     let traktType: 'movies' | 'shows' | undefined;
+     if (type === 'movie') traktType = 'movies';
+@@ -2035,7 +2040,7 @@ async function getTraktCatalog(
+     // If type is 'all', traktType remains undefined
+ 
+     let genreSlug = undefined;
+-    if (genre && genre !== 'None') {
++    if (!traktSortDropdown && genre && genre !== 'None') {
+        // Fetch the full genre objects list (cached)
+        const genreList = await require('../utils/traktUtils.js').fetchTraktGenres(traktType || 'all');
+        
+diff --git a/addon/lib/getManifest.ts b/addon/lib/getManifest.ts
+index ec0801d..e572f2f 100644
+--- a/addon/lib/getManifest.ts
++++ b/addon/lib/getManifest.ts
+@@ -259,7 +259,9 @@ async function createTraktCatalog(userCatalog: any, prefetchedMovieGenres: any[]
+       logger.warn(`Trakt no pre-fetched genres available for type: ${userCatalog.type}`);
+     }
+ 
+-    const genreNames = genres.map((g: any) => g.name);
++    // A list can trade its genre filter for sort choices; 'None' keeps the list's configured sort.
++    const sortProvider = sortDropdownProvider(userCatalog);
++    const genreNames = sortProvider ? sortChoiceLabels(sortProvider) : genres.map((g: any) => g.name);
+ 
+     const genreOptions = userCatalog.showInHome ? genreNames : ['None', ...genreNames];
+ 
+diff --git a/addon/utils/discoverSortDropdown.ts b/addon/utils/discoverSortDropdown.ts
+index 56a67e8..9f59732 100644
+--- a/addon/utils/discoverSortDropdown.ts
++++ b/addon/utils/discoverSortDropdown.ts
+@@ -4,11 +4,11 @@
+ // catalog handler maps it back to the provider's own sort and direction.
+ //
+ // Sorting has to happen before a list is cut into pages, so each provider maps
+-// the labels to its native sort. MDBList sorts server-side; Letterboxd
++// the labels to its native sort. MDBList and Trakt sort server-side; Letterboxd
+ // lists arrive whole from StremThru, so they are sorted here on the fields
+ // StremThru sends (year, rating, runtime, title, index).
+ 
+-export type SortDropdownProvider = 'mdblist' | 'letterboxd';
++export type SortDropdownProvider = 'mdblist' | 'trakt' | 'letterboxd';
+ 
+ export interface SortChoice {
+   label: string;
+@@ -38,6 +38,22 @@ const MDBLIST_CHOICES: SortChoice[] = [
+   { label: 'Random', sort: 'random', order: 'asc' },
+ ];
+ 
++// Trakt sorts the external ratings (imdb_rating, tmdb_rating, rt_tomatometer,
++// metascore, the vote counts) for VIP accounts only and quietly falls back to
++// rank for everyone else, so only the sorts every account gets are offered.
++const TRAKT_CHOICES: SortChoice[] = [
++  { label: 'Release Date (Newest)', sort: 'released', order: 'desc' },
++  { label: 'Release Date (Oldest)', sort: 'released', order: 'asc' },
++  { label: 'List Rank', sort: 'rank', order: 'asc' },
++  { label: 'Trakt Rating', sort: 'percentage', order: 'desc' },
++  { label: 'Popularity', sort: 'popularity', order: 'desc' },
++  { label: 'Runtime (Longest)', sort: 'runtime', order: 'desc' },
++  { label: 'Runtime (Shortest)', sort: 'runtime', order: 'asc' },
++  { label: 'Title (A-Z)', sort: 'title', order: 'asc' },
++  { label: 'Date Added (Newest)', sort: 'added', order: 'desc' },
++  { label: 'Random', sort: 'random', order: 'asc' },
++];
++
+ // sort names a StremThru list item field. StremThru sends the release year only,
+ // so titles from the same year keep their list order.
+ const LETTERBOXD_CHOICES: SortChoice[] = [
+@@ -50,19 +66,26 @@ const LETTERBOXD_CHOICES: SortChoice[] = [
+   { label: 'Title (A-Z)', sort: 'title', order: 'asc' },
+ ];
+ 
+-const CHOICES: Record<SortDropdownProvider, SortChoice[]> = { mdblist: MDBLIST_CHOICES, letterboxd: LETTERBOXD_CHOICES };
++const CHOICES: Record<SortDropdownProvider, SortChoice[]> = { mdblist: MDBLIST_CHOICES, trakt: TRAKT_CHOICES, letterboxd: LETTERBOXD_CHOICES };
+ 
+ const BY_LABEL: Record<SortDropdownProvider, Map<string, SortChoice>> = {
+   mdblist: new Map(MDBLIST_CHOICES.map((c) => [c.label.toLowerCase(), c])),
++  trakt: new Map(TRAKT_CHOICES.map((c) => [c.label.toLowerCase(), c])),
+   letterboxd: new Map(LETTERBOXD_CHOICES.map((c) => [c.label.toLowerCase(), c])),
+ };
+ 
++// Feeds and generated catalogs with no list order to choose from.
++const TRAKT_EXCLUDED = /^trakt\.(upnext|unwatched|calendar|most_favorited|trending|popular|anticipated|recommendations|search)\b/;
++
+ /** Which provider's sort choices a catalog id can offer, or null when it has none. */
+ export function sortDropdownProviderForId(id: string): SortDropdownProvider | null {
+   if (id.startsWith('mdblist.')) {
+     if (id === 'mdblist.upnext' || id.startsWith('mdblist.discover.') || id.startsWith('mdblist.recommended.')) return null;
+     return 'mdblist';
+   }
++  if (id.startsWith('trakt.')) {
++    return TRAKT_EXCLUDED.test(id) ? null : 'trakt';
++  }
+   if (id.startsWith('letterboxd.')) return 'letterboxd';
+   return null;
+ }
+diff --git a/configure/src/components/sections/CatalogsSettings.tsx b/configure/src/components/sections/CatalogsSettings.tsx
+index af36d7d..62a5a6a 100644
+--- a/configure/src/components/sections/CatalogsSettings.tsx
++++ b/configure/src/components/sections/CatalogsSettings.tsx
+@@ -733,6 +733,7 @@ const TraktSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogCon
+   const { setConfig, catalogTTL, config } = useConfig();
+   const [sort, setSort] = useState<TraktSortOption>(catalog.sort as TraktSortOption || 'default');
+   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(catalog.sortDirection as 'asc' | 'desc' || 'asc');
++  const [discoverDropdown, setDiscoverDropdown] = useState<'genres' | 'sort'>(catalog.discoverDropdown === 'sort' ? 'sort' : 'genres');
+   const [cacheTTL, setCacheTTL] = useState<number | null>(catalog.cacheTTL ?? null);
+   const [useShowPoster, setUseShowPoster] = useState<boolean>(catalog.metadata?.useShowPosterForUpNext || false);
+   const [hideWatchedTrakt, setHideWatchedTrakt] = useState<string>(catalog.metadata?.hideWatchedTrakt === true ? 'on' : catalog.metadata?.hideWatchedTrakt === false ? 'off' : 'global');
+@@ -752,6 +753,7 @@ const TraktSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogCon
+   const minCacheTTL = minCacheTTLFor(catalog.id);
+   const isUpNext = catalog.id === 'trakt.upnext';
+   const isCalendar = catalog.id === 'trakt.calendar';
++  const showDropdownChoice = supportsSortDropdown(catalog.id);
+   const showSortOptions = !catalog.id.startsWith('trakt.trending.') && !catalog.id.startsWith('trakt.popular.') && !catalog.id.startsWith('trakt.anticipated.') && catalog.id !== 'trakt.upnext';
+ 
+   const [posterShape, setPosterShape] = useState<'poster' | 'landscape'>(catalog.metadata?.posterShape === 'landscape' ? 'landscape' : 'poster');
+@@ -769,6 +771,7 @@ const TraktSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogCon
+               ...c,
+               sort,
+               sortDirection,
++              discoverDropdown: showDropdownChoice && discoverDropdown === 'sort' ? 'sort' : undefined,
+               cacheTTL: resolveCatalogTTL(cacheTTL, minCacheTTL),
+               metadata: {
+                 ...c.metadata, posterShape: posterShape === 'landscape' ? 'landscape' : undefined,
+@@ -855,6 +858,7 @@ const TraktSettingsDialog = ({ catalog, isOpen, onClose }: { catalog: CatalogCon
+             help="Minimum 5 minutes to avoid excessive API calls"
+           />
+ 
++          {showDropdownChoice && <DiscoverDropdownField value={discoverDropdown} onChange={setDiscoverDropdown} />}
+           {isUpNext && (
+             <div className="space-y-2">
+               <div className="flex items-center justify-between">
+diff --git a/configure/src/lib/sortDropdown.ts b/configure/src/lib/sortDropdown.ts
+index 880941b..589df33 100644
+--- a/configure/src/lib/sortDropdown.ts
++++ b/configure/src/lib/sortDropdown.ts
+@@ -2,10 +2,13 @@
+ // instead of genres. Mirrors sortDropdownProviderForId in
+ // addon/utils/discoverSortDropdown.ts; keep the two in step.
+ 
++const TRAKT_EXCLUDED = /^trakt\.(upnext|unwatched|calendar|most_favorited|trending|popular|anticipated|recommendations|search)\b/;
++
+ export function supportsSortDropdown(catalogId: string): boolean {
+   if (catalogId.startsWith('mdblist.')) {
+     return catalogId !== 'mdblist.upnext' && !catalogId.startsWith('mdblist.discover.') && !catalogId.startsWith('mdblist.recommended.');
+   }
++  if (catalogId.startsWith('trakt.')) return !TRAKT_EXCLUDED.test(catalogId);
+   if (catalogId.startsWith('letterboxd.')) return true;
+   return false;
+ }

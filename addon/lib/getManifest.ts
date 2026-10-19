@@ -5,7 +5,7 @@ import { fetchMDBListGenres } from "../utils/mdbList";
 import { getGenresFromStremThruCatalog, fetchStremThruCatalog } from "../utils/stremthru";
 import { fetchTraktGenres } from "../utils/traktUtils";
 import { getGenresBySelection } from "../static/genres";
-import { mdblistSortChoiceLabels, usesMdblistSortDropdown } from "../utils/mdblistSortChoices";
+import { sortChoiceLabels, sortDropdownProvider } from "../utils/discoverSortDropdown";
 import buildInfo from "./buildInfo";
 import catalogsTranslationsJson from "../static/translations.json";
 import catalogTypesJson from "../static/catalog-types.json";
@@ -210,7 +210,8 @@ async function createMDBListCatalog(userCatalog: any, mdblistKey: string, prefet
     }
 
     // A list can trade its genre filter for sort choices; 'None' keeps the list's configured sort.
-    const dropdownValues = usesMdblistSortDropdown(userCatalog) ? mdblistSortChoiceLabels() : genres;
+    const sortProvider = sortDropdownProvider(userCatalog);
+    const dropdownValues = sortProvider ? sortChoiceLabels(sortProvider) : genres;
     const genreOptions = userCatalog.id.startsWith('mdblist.recommended.')
       ? ['None']
       : (userCatalog.showInHome ? dropdownValues : ['None', ...dropdownValues]);
@@ -482,7 +483,11 @@ async function createLetterboxdCatalog(userCatalog: any, showPrefix: boolean = f
       "9u":  "War",
       "8Q":  "Western",
     };
-    let genreOptions = Object.values(genreNameById).sort((a, b) => a.localeCompare(b));
+    // A list can trade its genre filter for sort choices; 'None' keeps the list's own order.
+    const sortProvider = sortDropdownProvider(userCatalog);
+    let genreOptions = sortProvider
+      ? sortChoiceLabels(sortProvider)
+      : Object.values(genreNameById).sort((a, b) => a.localeCompare(b));
     genreOptions = userCatalog.showInHome ? genreOptions : ['None', ...genreOptions];
     const catalog = {
       id: userCatalog.id,
